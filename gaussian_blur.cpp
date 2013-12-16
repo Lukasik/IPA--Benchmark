@@ -124,14 +124,19 @@ verticalStart:
 			cvtsi2ss xmm5, [p]
 			movd [p], xmm5
 
+
+
 			//buffer[y + radius] = p
-			mov ebx, [y]
-			add ebx, [radius]
-			mov eax, 4
-			mul ebx
+			mov eax, [y]
+			add eax, [radius]
+			shl eax, 2
+			mov [tmpInt], eax
 			add eax, buffer
 			movd [eax], xmm5
-
+			}
+			fprintf(f, "index: %x\n", tmpInt);
+			__asm
+			{
 
 			// sum = sum + dif + fRadius*p
 			addss xmm6, xmm7
@@ -139,23 +144,18 @@ verticalStart:
 			mulss xmm1, xmm5
 			addss xmm6, xmm1
 			movd [sum], xmm6 //DEBUG
-		}
 
-		// fprintf(f, "sum: %f\n", dif);
-
-		__asm
-		{
 
 			//dif = dif + p
 			addss xmm7, xmm5
 			movd [dif], xmm7 //DEBUG
-
 
 			// if (y >= y_start)
 			mov eax, [y]
 			cmp eax, [y_start]
 			// pokud je y menší než y_start
 			jl VYelseIf
+
 				//s = 0, w = 0
 				xorps xmm0, xmm0
 				movd [s], xmm0
@@ -193,16 +193,14 @@ verticalStart:
 				//p = (float)(radius - y);
 				mov eax, [radius]
 				sub eax, [y]
-				mov [tmp], eax
-				cvtsi2ss xmm5, [tmp]
-				movd [tmp], xmm5
+				cvtsi2ss xmm5, eax
 
-				//if (0 < p)
+				//if (p <= 0) tak pokračujem tady, jinak skok
 				xorps xmm1, xmm1
-				cmpless xmm1, xmm5 //0 menší než p
-				movd eax, xmm1 //pokud true tak samé 1
+				cmpless xmm5, xmm1 //0 menší než p
+				movd eax, xmm5 //pokud true tak samé 1
 				test eax, eax
-				jnz VPg1
+				jz VPg1
 				//TODO nějak získat výsledek porovnání
 				//jg VPg1 // pokud je p větší než 0
 
@@ -212,14 +210,13 @@ verticalStart:
 				mov eax, [yPlusRadius]
 				sub eax, [image_h]
 				add eax, 1
-				mov [tmp], eax
-				cvtsi2ss xmm5, [tmp]
+				cvtsi2ss xmm5, eax
 
 				//if (p > 0)
-				cmpless xmm1, xmm5
-				movd eax, xmm1 //pokud true tak samé 1
+				cmpless xmm5, xmm1
+				movd eax, xmm5 //pokud true tak samé 1
 				test eax, eax
-				jnz VPg2
+				jz VPg2
 				//TODO nějak získat výsledek porovnání
 				//jg VPg2
 
@@ -246,6 +243,7 @@ verticalStart:
 				add eax, [x]
 				// mov [tmpInt], eax //DEBUG
 				add eax, new_image
+				sub ebx, 3
 				mov ebx, [tmp]
 				// mov bl, 0x0FF //DEBUG
 				mov [eax], bl
@@ -263,21 +261,6 @@ VYend:
 			inc eax
 			mov [x], eax
 
-			mov eax, [sumConst]
-			add eax,4
-			mov [sumConst], eax
-
-			xor ebx, ebx
-			mov bl, [eax]
-			/// sum = image[y_start - radius - 1)*image_w +x]
-
-			mov [sum], ebx
-			cvtsi2ss xmm6, ebx
-			// dif = -sum
-			neg ebx
-			mov [dif], ebx
-			cvtsi2ss xmm7, ebx
-
 			//y = y_start - 2*radius -1
 			mov eax, [yy_start]
 			mov [y], eax
@@ -289,6 +272,23 @@ VYend:
 			sub eax, [radius]
 			add eax, 2
 			mov [yMinusRadius], eax
+
+			// sum = image[y_start - radius - 1)*image_w +x]
+			mov eax, [y_start]
+			sub eax, [radius]
+			sub eax, 1
+			mov ebx, [image_w]
+			mul ebx
+			add eax, [x]
+			xor ebx, ebx
+			shl eax, 4
+			add eax, image
+			mov bl, [eax]
+			cvtsi2ss xmm6, ebx
+
+			// dif = -sum
+			neg ebx
+			cvtsi2ss xmm7, ebx
 
 			dec ecx
 			jmp verticalStart
@@ -317,18 +317,14 @@ VPg1: 		// 	if (p > 0)
 			//p = p*(p-1)/2 + fRadius*p;
 			movd [p], xmm5
 			movd xmm1, [p]
-			movd xmm0, [const1]
-			subss xmm1, xmm0
+			subss xmm1, [const1]
 			mulss xmm1, xmm5
-			movd xmm0, [const2]
-			divss xmm1, xmm0
-			movd [p], xmm1
-			movd xmm2, [p] // p*(p-1)/2
-			movd xmm1, [fRadius]
-			mulss xmm1, xmm5
-			addss xmm2, xmm1
-			movd [p], xmm2
-			movd xmm5, [p]
+			divss xmm1, [const2]
+
+			movd xmm2, [fRadius]
+			mulss xmm2, xmm5
+			addss xmm5, xmm1
+			movd [p], xmm5
 
 			//s += buffer[0]*p;
 			movd xmm1, [buffer]
@@ -354,18 +350,14 @@ VPg2:		// if (p > 0)
 			//p = p*(p-1)/2 + fRadius*p; //TODO para 3 øádky
 			movd [p], xmm5
 			movd xmm1, [p]
-			movd xmm0, [const1]
-			subss xmm1, xmm0
+			subss xmm1, [const1]
 			mulss xmm1, xmm5
-			movd xmm0, [const2]
-			divss xmm1, xmm0
-			movd [p], xmm1
-			movd xmm2, [p] // p*(p-1)/2
-			movd xmm1, [fRadius]
-			mulss xmm1, xmm5
-			addss xmm2, xmm1
-			movd [p], xmm2
-			movd xmm5, [p]
+			divss xmm1, [const2]
+
+			movd xmm2, [fRadius]
+			mulss xmm2, xmm5
+			addss xmm5, xmm1
+			movd [p], xmm5
 
 
 			//s += buffer[image_h - 1]*p;
