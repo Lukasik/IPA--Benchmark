@@ -67,7 +67,7 @@ void CGaussianBlur::Blur(const unsigned char *image, int image_w, int image_h, u
 		int radius = (short)floor(fRadius);
 		int x_start = radius + 1;
 		int y_start = radius + 1;
-		int x_end = image_w - radius;
+		int x_end = image_w - radius - 1;
 		int y_end = image_h - radius;
 
 		fRadius -= radius;
@@ -84,6 +84,7 @@ void CGaussianBlur::Blur(const unsigned char *image, int image_w, int image_h, u
 		float sum = image[(y_start - radius - 1)*image_w+x];
 		float dif = -sum;
 		float p = 0;
+		float weightMinusW = weight;
 
 		FILE *f = fopen("blur.indexes", "w+");
 
@@ -94,6 +95,13 @@ void CGaussianBlur::Blur(const unsigned char *image, int image_w, int image_h, u
 			mov ecx, [loopCount]
 			movd xmm6, [sum]
 			movd xmm7, [dif]
+
+			}
+			    	//fprintf(f, "Vnější cyklus: x = %d\n", x);
+					//fprintf(f, "Vnější cyklus: sum = %f\n", sum);
+					//fprintf(f, "Vnější cyklus: dif = %f\n", dif);
+			__asm
+			{
 verticalStart:
 
 			mov eax, [yPlusRadius]
@@ -130,26 +138,25 @@ verticalStart:
 			mov eax, [y]
 			add eax, [radius]
 			shl eax, 2
-			mov [tmpInt], eax
 			add eax, buffer
 			movd [eax], xmm5
-			}
-			fprintf(f, "index: %x\n", tmpInt);
-			__asm
-			{
 
 			// sum = sum + dif + fRadius*p
 			addss xmm6, xmm7
 			movd xmm1, [fRadius]
 			mulss xmm1, xmm5
 			addss xmm6, xmm1
-			movd [sum], xmm6 //DEBUG
 
 
 			//dif = dif + p
 			addss xmm7, xmm5
-			movd [dif], xmm7 //DEBUG
-
+}
+			//fprintf(f, "Vnitřní cyklus: p = %f\n", p);
+			//fprintf(f, "Vnitřní cyklus: index = %d\n", yPlusRadius);
+			//fprintf(f, "Vnitřní cyklus: sum = %f\n", sum);
+			//fprintf(f, "Vnitřní cyklus: dif = %f\n", dif);
+__asm
+{
 			// if (y >= y_start)
 			mov eax, [y]
 			cmp eax, [y_start]
@@ -159,7 +166,8 @@ verticalStart:
 				//s = 0, w = 0
 				xorps xmm0, xmm0
 				movd [s], xmm0
-				movd [w], xmm0
+				movd xmm0, [weight]
+				movd [weightMinusW], xmm0
 
 				//dif += buffer[y - radius] - 2*buffer[y]
 				// 2*buffer[y] = edx
@@ -188,12 +196,19 @@ verticalStart:
 				movd xmm1, [fRadius]
 				mulss xmm1, xmm0
 				subss xmm6, xmm1
-				// movd [sum], xmm6 //DEBUG
 
 				//p = (float)(radius - y);
 				mov eax, [radius]
 				sub eax, [y]
 				cvtsi2ss xmm5, eax
+				}
+				//fprintf(f, "Podmínka velká: if y (%d) >= y_start (%d)\n", y, y_start);
+				//fprintf(f, "Podmínka velká: index = %d\n", y-radius);
+				//fprintf(f, "Podmínka velká: dif = %f\n", dif);
+				//fprintf(f, "Podmínka velká: sum = %f\n", sum);
+				//fprintf(f, "Podmínka velká: p = %f\n", p);
+				__asm
+				{
 
 				//if (p <= 0) tak pokračujem tady, jinak skok
 				xorps xmm1, xmm1
@@ -211,7 +226,9 @@ verticalStart:
 				sub eax, [image_h]
 				add eax, 1
 				cvtsi2ss xmm5, eax
-
+			}
+				//fprintf(f, "Podmínka velká: druhé p = %f\n", p);
+			__asm{
 				//if (p > 0)
 				cmpless xmm5, xmm1
 				movd eax, xmm5 //pokud true tak samé 1
@@ -221,17 +238,23 @@ verticalStart:
 				//jg VPg2
 
 				//new_image[x + y*image_w] = (unsigned char)((sum - s)/(weight - w));
-				xorps xmm1, xmm1
-				movd [tmp], xmm6
-				movd xmm1, [tmp]
-				subss xmm1, [s]
-				movd [tmp], xmm1 //DEBUG sum - s
-				movd xmm0, [weight]
-				subss xmm0, [w]
-				divss xmm1, xmm0
-				movd [tmp], xmm1 //DEBUG (sum-s)/(weight - w)
-				cvtss2si eax, xmm1
-				xorps xmm2, xmm2
+				xorps xmm1, xmm1 // vynulování registru
+				movd [sum], xmm6 //uložení sum do tmp
+				movd xmm1, [sum] //sum do mm1
+				subss xmm1, [s] // sum - s
+				movd xmm0, [weightMinusW] //xmm0  weight
+			}
+				//fprintf(f, "Přiřazení new_image: sum-s = %f\n", tmp);
+				//fprintf(f, "Přiřazení new_image: weight-w = %f\n", weightMinusW);
+			__asm{
+				divss xmm1, xmm0 //(sum-s)/(weight-w)
+			}
+				//fprintf(f, "Přiřazení new_image: weight = %f\n", weight);
+				// //fprintf(f, "Přiřazení new_image: weight-w = %f\n", tmp);
+				//fprintf(f, "Přiřazení new_image: hodnota = %f\n", tmp);
+				__asm{
+				cvtss2si eax, xmm1 //eax = int dělení
+				xorps xmm2, xmm2 //vynulování
 				movd xmm1, eax
 				packssdw xmm1, xmm2
 				packuswb xmm1, xmm2
@@ -247,12 +270,18 @@ verticalStart:
 				mov ebx, [tmp]
 				// mov bl, 0x0FF //DEBUG
 				mov [eax], bl
+				sub eax, new_image //DEBUG
+			}
+				//fprintf(f, "Přiřazení new_image: index = %d\n", tmpInt);
+
+			__asm{
 			// }
-			// fprintf(f, "%d: %d\n", tmpInt, tmpInt2);
+			// //fprintf(f, "%d: %d\n", tmpInt, tmpInt2);
 			// __asm{
 			dec ecx
 			jmp verticalStart
 VYend:
+
 			mov ecx, [x_end]
 			cmp ecx, [x]
 			je verticalEnd
@@ -281,7 +310,6 @@ VYend:
 			mul ebx
 			add eax, [x]
 			xor ebx, ebx
-			shl eax, 4
 			add eax, image
 			mov bl, [eax]
 			cvtsi2ss xmm6, ebx
@@ -289,6 +317,13 @@ VYend:
 			// dif = -sum
 			neg ebx
 			cvtsi2ss xmm7, ebx
+
+			}
+			    	//fprintf(f, "Vnější cyklus: x = %d\n", x);
+					//fprintf(f, "Vnější cyklus: sum = %f\n", sum);
+					//fprintf(f, "Vnější cyklus: dif = %f\n", dif);
+			__asm
+			{
 
 			dec ecx
 			jmp verticalStart
@@ -306,6 +341,9 @@ VYelseIf:	// else if (y + radius >= y_start)
 			mulss xmm0, [const2]
 			//dif += -2*buffer[y]
 			subss xmm7, xmm0
+		}
+			//fprintf(f, "Podmínka elseif: dif = %f\n", dif);
+		__asm{
 
 
 VYelse:
@@ -315,7 +353,6 @@ VYelse:
 
 VPg1: 		// 	if (p > 0)
 			//p = p*(p-1)/2 + fRadius*p;
-			movd [p], xmm5
 			movd xmm1, [p]
 			subss xmm1, [const1]
 			mulss xmm1, xmm5
@@ -324,7 +361,6 @@ VPg1: 		// 	if (p > 0)
 			movd xmm2, [fRadius]
 			mulss xmm2, xmm5
 			addss xmm5, xmm1
-			movd [p], xmm5
 
 			//s += buffer[0]*p;
 			movd xmm1, [buffer]
@@ -333,10 +369,16 @@ VPg1: 		// 	if (p > 0)
 			addss xmm0, xmm1
 			movd [s], xmm0
 
-			//w += p
-			movd xmm0, [w]
-			addss xmm0, xmm5
-			movd [w], xmm0
+			movd xmm0, [weightMinusW]
+			subss xmm0, xmm5
+			movd [weightMinusW], xmm0
+
+		}
+
+		//fprintf(f, "Podmínka malá první: p = %f\n", p);
+		//fprintf(f, "Podmínka malá první: s = %f\n", s);
+
+		__asm{
 
 			dec ecx
 			jmp verticalStart
@@ -357,7 +399,6 @@ VPg2:		// if (p > 0)
 			movd xmm2, [fRadius]
 			mulss xmm2, xmm5
 			addss xmm5, xmm1
-			movd [p], xmm5
 
 
 			//s += buffer[image_h - 1]*p;
@@ -372,62 +413,21 @@ VPg2:		// if (p > 0)
 			addss xmm0, xmm1
 			movd [s], xmm0
 
-			//w += p
-			movd xmm0, [w]
-			addss xmm0, xmm5
-			movd [w], xmm0
+			movd xmm0, [weightMinusW]
+			subss xmm0, xmm5
+			movd [weightMinusW], xmm0
 			// }
+			}
 
+			//fprintf(f, "Podmínka malá druhá: p = %f\n", p);
+			//fprintf(f, "Podmínka malá druhá: s = %f\n", s);
+
+			__asm{
 			dec ecx
 			jmp verticalStart
 
 verticalEnd:
 		}
-
-	  //  for (x = x_start; x < x_end; ++x)     // vertical blur...
-	  //  {
-			// sum = image[x + (y_start - radius - 1)*image_w];
-			// dif = -sum;
-
-			// for (y = y_start - 2*radius - 1; y < y_end; ++y)
-			// {													// inner vertical Radius loop
-			// 	p = (float)image[x + (y + radius)*image_w];	// next pixel //TODO paralelnì s následujícím øádkem
-			// 	buffer[y + radius] = p;							// buffer pixel
-			// 	sum += dif + fRadius*p;							//TODO paralelnì i další øádek
-			// 	dif += p;										// accumulate pixel blur
-
-
-
-			// 	if (y >= y_start)
-			// 	{
-			// 		s = 0, w = 0;							// border blur correction
-			// 		sum -= buffer[y - radius - 1]*fRadius;		// addition for fraction blur
-			// 		dif += buffer[y - radius] - 2*buffer[y];	// sum up differences: +1, -2, +1
-
-			// 		// cut off accumulated blur area of pixel beyond the border
-			// 		// assume: added pixel values beyond border = value at border
-			// 		p = (float)(radius - y);                   // top part to cut off
-			// 		if (p > 0)
-			// 		{
-			// 			p = p*(p-1)/2 + fRadius*p; //TODO paralenì 3 øádky
-			// 			s += buffer[0]*p;
-			// 			w += p;
-			// 		}
-			// 		p = (float)(y + radius - image_h + 1);               // bottom part to cut off //TODO paralelnì
-			// 		if (p > 0)
-			// 		{
-			// 			p = p*(p-1)/2 + fRadius*p; //TODO para 3 øádky
-			// 			s += buffer[image_h - 1]*p;
-			// 			w += p;
-			// 		}
-			// 		new_image[x + y*image_w] = (unsigned char)((sum - s)/(weight - w)); // set blurred pixel //TODO
-			// 	}
-			// 	else if (y + radius >= y_start)
-			// 	{
-			// 		dif -= 2*buffer[y];
-			// 	}
-			// } // for y
-	  //  } // for x
 
 	  //   for (y = y_start; y < y_end; ++y)     // horizontal blur...
 	  //   {
