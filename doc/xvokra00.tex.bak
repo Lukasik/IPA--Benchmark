@@ -1,0 +1,142 @@
+\documentclass[12pt,a4paper,titlepage,final]{article}
+\usepackage[czech]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[bookmarksopen,colorlinks,plainpages=false,urlcolor=blue,unicode]{hyperref}
+\usepackage{url}
+\usepackage{float}
+\usepackage[dvipdf]{graphicx}
+\usepackage[top=3.5cm, left=2.5cm, text={17cm, 24cm}, ignorefoot]{geometry}
+
+\begin{document}
+\newpage
+\pagestyle{empty}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% titulní strana
+\def\author{Lukáš Vokráčko}
+\def\email{xvokra00@stud.fit.vutbr.cz}
+\def\projname{Semestrální projekt - řešení obvodů}
+\input{title.tex}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% obsah
+
+\tableofcontents
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% textova zprava
+\newpage
+\pagestyle{plain}
+\pagenumbering{arabic}
+\setcounter{page}{1}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Zadání}
+	Optimalizujte implementaci Gaussovského rozostření obrázku použitím SSE a MMX instrukcí.
+
+\section{Rozbor problému}
+	Ke správnému řešení rychlostních problémů patří analýza již existujícího kódu a vhodné zvolení metod k optimalizaci.
+	A to takových, které přinesou největší užitek v poměru k vynaloženému úsilí.
+
+	Při řešení tohoto konkrétního problému jsem zvolil způsoby popsané v následující kapitole.
+
+\section{Optimalizace}
+	\subsection{Implementované optimalizace}
+		\subsubsection{Minimalizace podmíněných skoků}
+			Počet skoků lze minimalizovat analýzou podmínek a jejich vhodným rozmístěním v kódu.
+			Je výhodné umisťovat kód větve, která se provádí častěji přímo do hlavního bloku kódu
+			a provádět instrukci skoku pouze v případě nutnosti vykonat kód statisticky méně prováděné větve.
+			\\\\
+			Statistiky vyhodnocení podmínek pro vzorový obrázek:
+
+			\paragraph{Vertikální rozostření}
+			\begin{center}
+			    \begin{tabular}{ | l | l | l | }
+			    \hline
+			    Podmínka & Vyhodnocení jako \texttt{true} & Relativní četnost vyhodnocení \\ \hline
+			    y \textgreater= y\_start & 1384020 & 0.984160 \\ \hline
+			    y + radius \textgreater= y\_start & 10395 & 0.007391 \\ \hline
+			    1. p \textgreater 0 & 0 & 0.000000 \\ \hline
+			    2. p \textgreater 0 & 0 & 0.000000 \\ \hline
+			    \end{tabular}
+			\end{center}
+
+			\paragraph{Horizontální rozostření}
+			\begin{center}
+			    \begin{tabular}{ | l | l | l | }
+			    \hline
+			    Podmínka & Vyhodnocení jako \texttt{true} & Relativní četnost vyhodnocení \\ \hline
+			    x \textgreater= x\_start & 1383938 & 0.989998 \\ \hline
+			    x + radius \textgreater= x\_start & 6524 & 0.004666 \\ \hline
+			    1. p \textgreater  0 & 0 & 0.000000 \\ \hline
+			    2. p \textgreater  0 & 0 & 0.000000 \\ \hline
+			    \end{tabular}
+			\end{center}
+
+
+		\subsubsection{Použití registrů pro ukládání hodnot}
+			Po analýze algoritmu jsem vhodně zvolil proměnné, které jsou nejčastěji používané
+			a pro jejich uložení jsem použil vhodné registry. Tato čísla jsem získal při použití
+			algoritmu na vzorovém obrázku.
+
+			\begin{center}
+			    \begin{tabular}{ | l | l | l | l |}
+			    \hline
+			    Proměnná & Počet použití & Zvolený registr & Část výpočtu \\ \hline
+			    y & 7217556 & edx & vertical \\ \hline
+			    x & 7217556 & edx & horizontal \\ \hline
+			    radius & 5051598 & ecx & vertical, horizontal \\ \hline
+			    dif & 2179031 & xmm7 & vertical, horizontal \\ \hline
+			    sum & 2162882 & xmm6 & vertical, horizontal \\ \hline
+			    p & 5778966 & xmm5 & vertical, horizontal \\ \hline
+			    s & 1433206 & xmm4 & vertical, horizontal \\ \hline
+			    w & 1433206 & xmm3 & vertical, horizontal \\ \hline
+			    \end{tabular}
+			\end{center}
+
+		\subsubsection{Ukládání neměnných hodnot} \label{static}
+			Některé hodnoty se v průběhu výpočtu nemění nebo se v každé iteraci mění pouze minimálně.
+			Tyto hodnoty si lze předvypočítat a ukládát je do paměti ještě před zahájením samotného výpočtu.
+
+	\subsection{Další možné optimalizace}
+		Dalšími možnými způsoby jak urychlit výpočet hodnot pro nový obrázek je několik.
+		Vzhledem k nedostatku času jsem se je nerozhodl implementovat, pouze je zde zmíním.
+
+		\subsubsection{Ukládání neměnných hodnot}
+			Druh optimalizace zmíněný v \ref{static} je možné použít pro více hodnot,
+			než jsem se rozhodl implementoval.
+			Mezi tyto hodnoty patří následující:
+
+			\begin{itemize}
+				\item Vertikální rozostření
+					\begin{itemize}
+						\item \begin{verbatim}image[x + (y_start - radius - 1)*image_w]\end{verbatim}
+						\item \begin{verbatim}image[x + (y_start - radius - 1)*image_w]\end{verbatim}
+						\item \begin{verbatim}buffer[y+radius]\end{verbatim}
+						\item \begin{verbatim}buffer[y-radius]\end{verbatim}
+						\item \begin{verbatim}buffer[y]\end{verbatim}
+					\end{itemize}
+				\item Horizontální rozostření
+					\begin{itemize}
+						\item \begin{verbatim}new_image[x_start - radius - 1 + y*image_w]\end{verbatim}
+						\item \begin{verbatim}buffer[x+radius]\end{verbatim}
+						\item \begin{verbatim}buffer[x-radius]\end{verbatim}
+						\item \begin{verbatim}buffer[x]\end{verbatim}
+					\end{itemize}
+			\end{itemize}
+
+		\subsubsection{Paralelní zpracování}
+			Další potenciální zrychlení je možné změnou indexování obrázků nebo cyklů tak,
+			aby se hodnoty čtené/zapisované ve vnitřních cyklech vyskytovaly ve fyzické paměti za sebou.
+			To by umožnilo plně využít potenciál MMX/SSE instrukcí a pracovat až s 16 hodnotami najednou.
+
+			Tento druh optimalizace lze použít i pro \texttt{buffer} bez významnějších úprav
+			zdrojového kódu algoritmu, nicméně tuto variantu se mi nepodařilo úspěšně\footnote{Se zachováním chyby v rozmení 0-5}  implementovat.
+
+
+\section{Závěr}
+	Pomocí výše zmíněných optimalizací se mi podařilo výpočet urychlit $1.5\times$, nicméně se
+	moje implementace neobešla bez chyb. Průměrná hodnota chyby na pixel činí $2.76$
+
+
+\end{document}
