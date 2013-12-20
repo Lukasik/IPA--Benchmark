@@ -165,9 +165,6 @@ verticalStart:
 				subss xmm1, xmm0
 				addss xmm7, xmm1
 
-
-
-
 				//sum -= buffer[y - radius - 1]*fRadius;
 				mov ebx, edx
 				sub ebx, ecx
@@ -190,6 +187,7 @@ verticalStart:
 				movd eax, xmm5 //pokud true tak samé 1
 				test eax, eax
 				jz VPg1
+		VPg1next:
 
 				// p = (float)(y + radius - image_h + 1);
 				xorps xmm1, xmm1
@@ -204,7 +202,7 @@ verticalStart:
 				movd eax, xmm5 //pokud true tak samé 1
 				test eax, eax
 				jz VPg2
-
+		VPg2next:
 				//new_image[x + y*image_w] = (unsigned char)((sum - s)/(weight - w));
 				xorps xmm1, xmm1 // vynulování registru
 				movaps xmm1, xmm6
@@ -293,7 +291,7 @@ VPg1: 		// 	if (p > 0)
 
 			subss xmm3, xmm5
 
-			jmp verticalStart
+			jmp VPg1next
 
 VPg2:		// if (p > 0)
 
@@ -318,7 +316,7 @@ VPg2:		// if (p > 0)
 
 			subss xmm3, xmm5
 
-			jmp verticalStart
+			jmp VPg2next
 
 verticalEnd:
 
