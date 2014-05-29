@@ -135,15 +135,9 @@ verticalStart:
 			//dif = dif + p
 			addss xmm7, xmm5
 
-			// movd [tmp], xmm6
-			// pushad} fprintf(f, "sum před pod: %.2f\n", tmp); __asm{popad
-			// movd [tmp], xmm7
-			// pushad} fprintf(f, "dif před pod: %.2f\n", tmp); __asm{popad
-			// if (y >= y_start)
 			cmp edx, [y_start]
 			// pokud je y menší než y_start
 			jl VYelseIf
-				// pushad}fprintf(f, "lezu do podmínky\n");__asm{popad
 				//s = 0, w = 0
 				xorps xmm4, xmm4
 				movd xmm3, [weight]
@@ -181,7 +175,7 @@ verticalStart:
 				sub ebx, edx
 				cvtsi2ss xmm5, ebx
 
-				//if (p <= 0) tak pokračujem tady, jinak skok
+				//if (p <= 0) 
 				xorps xmm1, xmm1
 				cmpless xmm5, xmm1 //0 menší než p
 				movd eax, xmm5 //pokud true tak samé 1
@@ -260,14 +254,10 @@ VYelseIf:	// else if (y + radius >= y_start)
 			add eax, ecx
 			cmp eax, [y_start]
 			jl VYelse
-			// pushad}fprintf(f, "elseif\n");__asm{popad
 			mov eax, edx
 			shl eax, 2
 			add eax, buffer
 			movd xmm0, [eax]
-
-			// movd [tmp], xmm0
-			// pushad} fprintf(f, "%.2f\n", tmp); __asm{popad
 
 			mulss xmm0, [const2]
 			subss xmm7, xmm0
@@ -295,7 +285,7 @@ VPg1: 		// 	if (p > 0)
 
 VPg2:		// if (p > 0)
 
-			//p = p*(p-1)/2 + fRadius*p; //TODO para 3 øádky
+			//p = p*(p-1)/2 + fRadius*p;
 			movaps xmm1, xmm5
 			subss xmm1, [const1]
 			mulss xmm1, xmm5
@@ -367,8 +357,6 @@ horizontalStart:
 			shl ebx, 2
 			add ebx, buffer
 			movd [ebx], xmm5
-			// mov [x], edx
-			// pushad}fprintf(f, "x: %d, y: %d\n",x,y);fflush(f);__asm{popad
 
 			// sum = sum + dif + fRadius*p
 			addss xmm6, xmm7
@@ -379,15 +367,10 @@ horizontalStart:
 			//dif = dif + p
 			addss xmm7, xmm5
 
-			// movd [tmp], xmm6
-			// pushad} fprintf(f, "sum před pod: %.2f\n", tmp); __asm{popad
-			// movd [tmp], xmm7
-			// pushad} fprintf(f, "dif před pod: %.2f\n", tmp); __asm{popad
 			// if (y >= y_start)
 			cmp edx, [x_start]
 			// pokud je y menší než y_start
 			jl HXelseIf
-				// pushad}fprintf(f, "lezu do podmínky\n");__asm{popad
 				//s = 0, w = 0
 				xorps xmm4, xmm4
 				movd xmm3, [weight]
@@ -410,8 +393,6 @@ horizontalStart:
 				addss xmm7, xmm1
 
 
-
-
 				//sum -= buffer[y - radius - 1]*fRadius;
 				mov ebx, edx
 				sub ebx, ecx
@@ -428,7 +409,7 @@ horizontalStart:
 				sub ebx, edx
 				cvtsi2ss xmm5, ebx
 
-				//if (p <= 0) tak pokračujem tady, jinak skok
+				//if (p <= 0) 
 				xorps xmm1, xmm1
 				cmpless xmm5, xmm1 //0 menší než p
 				movd eax, xmm5 //pokud true tak samé 1
@@ -473,7 +454,7 @@ HXend:
 			je horizontalEnd
 			mov [y], eax
 
-			//new_image[x + radius + y*image_w];  // next pixel OTODO +4
+			//new_image[x + radius + y*image_w];
 			mov ebx, [image_w]
 			mul ebx
 			add eax, [radius]
@@ -514,14 +495,10 @@ HXelseIf:	// else if (y + radius >= y_start)
 			add eax, ecx
 			cmp eax, [x_start]
 			jl HXelse
-			// pushad}fprintf(f, "elseif\n");__asm{popad
 			mov eax, edx
 			shl eax, 2
 			add eax, buffer
 			movd xmm0, [eax]
-
-			// movd [tmp], xmm0
-			// pushad} fprintf(f, "%.2f\n", tmp); __asm{popad
 
 			mulss xmm0, [const2]
 			subss xmm7, xmm0
@@ -549,7 +526,7 @@ HPg1: 		// 	if (p > 0)
 
 HPg2:		// if (p > 0)
 
-			//p = p*(p-1)/2 + fRadius*p; //TODO para 3 øádky
+			//p = p*(p-1)/2 + fRadius*p; 
 			movaps xmm1, xmm5
 			subss xmm1, [const1]
 			mulss xmm1, xmm5
